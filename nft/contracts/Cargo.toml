@@ -6,7 +6,6 @@ publish = false
 
 [lib]
 name = "nft"
-path = "./src/nft.rs"
 doctest = false
 crate-type = ["lib", "cdylib"]
 

@@ -1,8 +1,27 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Bytes, String, Env, Vec};
+mod contract;
+
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Bytes, Env, String, Vec, U256, Symbol};
 
 #[contract]
 pub struct NFT;
+
+
+const ADMIN: Symbol = symbol_short!("admin");
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ImpactProductData {
+    pub category: String,
+    pub location: String,
+    pub start_date: U256,
+    pub end_date: U256,
+    pub beneficiaries: String,
+    pub base_impact_value: U256,
+    pub listing_price: U256,
+    pub metadata_uri: String
+}
+
 
 #[contracttype]
 pub enum DataKey {
@@ -18,6 +37,10 @@ impl NFT {
     const SYMBOL: &'static str = "NFT";
     const METADATA: &'static str = "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC";
     const IMAGE: &'static str = "https://ipfs.io/ipfs/QmeRHSYkR4aGRLQXaLmZiccwHw7cvctrB211DzxzuRiqW6";
+
+    pub fn __constructor(env: Env, admin: Address) {
+        env.storage().instance().set(&ADMIN, &admin);
+    }
 
     pub fn owner_of(env: Env, token_id: i128) -> Address {
         env.storage().persistent().get(&DataKey::Owner(token_id)).unwrap_or_else(|| {
