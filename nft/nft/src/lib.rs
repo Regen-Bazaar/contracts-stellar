@@ -48,6 +48,11 @@ impl ImpactProductNFT {
         env.storage().instance().set(&DataKey::BASEURI, &base_token_uri);
     }
 
+    pub fn token_count(env: Env) -> i128 {
+        let data: i128 = env.storage().persistent().get(&DataKey::TokenCount).unwrap_or_else(|| {0});
+        data
+    }
+
     pub fn owner_of(env: Env, token_id: i128) -> Address {
         env.storage().persistent().get(&DataKey::Owner(token_id)).unwrap_or_else(|| {
             Address::from_string_bytes(&Bytes::from_slice(&env, &[0; 32]))
@@ -63,7 +68,7 @@ impl ImpactProductNFT {
     }
 
     pub fn token_uri(env: Env) -> String {
-        let data: String = env.storage().instance().get(&DataKey::BASEURI).expect("");
+        let data: String = env.storage().instance().get(&DataKey::BASEURI).expect("should contain uri");
         data
     }
 

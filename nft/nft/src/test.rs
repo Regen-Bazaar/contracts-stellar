@@ -39,6 +39,18 @@ fn test_token_uri() {
 }
 
 #[test]
+fn test_token_count() {
+    let env: Env = Env::default();
+    let admin: Address = Address::generate(&env);
+    let contract_id: Address = env.register(ImpactProductNFT, (&admin, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC"));
+    let client: ImpactProductNFTClient<'_> = ImpactProductNFTClient::new(&env, &contract_id);
+    assert_eq!(
+        client.token_count(),
+        0
+    );
+}
+
+#[test]
 fn test_mint() {
     let env: Env = Env::default();
     let admin: Address = Address::generate(&env);
@@ -48,6 +60,7 @@ fn test_mint() {
     client.mint(&to);
     let token_id: i128 = 1; // Since it's the first token minted
     assert_eq!(client.owner_of(&token_id), to);
+    assert_eq!(client.token_count(), 1);
 }
 
 #[test]
