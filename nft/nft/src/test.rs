@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::{ImpactProductNFT, ImpactProductNFTClient};
+use crate::{ImpactProductNFT, ImpactProductNFTClient, ImpactData};
 #[cfg(test)]
 use soroban_sdk::{Env, String, Address};
 #[cfg(test)]
@@ -57,8 +57,9 @@ fn test_mint() {
     let contract_id: Address = env.register(ImpactProductNFT, (&admin, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC"));
     let client: ImpactProductNFTClient<'_> = ImpactProductNFTClient::new(&env, &contract_id);
     let to: Address = Address::generate(&env);
-    client.mint(&to);
-    let token_id: i128 = 1; // Since it's the first token minted
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&to, &impact_data, &100);
+    let token_id: u128 = 1;
     assert_eq!(client.owner_of(&token_id), to);
     assert_eq!(client.token_count(), 1);
 }
@@ -70,8 +71,9 @@ fn test_owner_of() {
     let contract_id: Address = env.register(ImpactProductNFT, (&admin, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC"));
     let client: ImpactProductNFTClient<'_> = ImpactProductNFTClient::new(&env, &contract_id);
     let owner: Address = Address::generate(&env);
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     assert_eq!(client.owner_of(&token_id), owner);
 }
 
@@ -84,8 +86,9 @@ fn test_transfer() {
     let owner: Address = Address::generate(&env);
     let to: Address = Address::generate(&env);
     env.mock_all_auths();
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     client.transfer(&owner, &to, &token_id);
     assert_eq!(client.owner_of(&token_id), to);
 }
@@ -100,8 +103,9 @@ fn test_approve_and_is_approved() {
     let owner: Address = Address::generate(&env);
     let operator: Address = Address::generate(&env);
     env.mock_all_auths();
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     client.approve(&owner, &operator, &token_id);
     assert!(client.is_approved(&operator, &token_id));
 }
@@ -114,8 +118,9 @@ fn test_is_approved_false() {
     let client: ImpactProductNFTClient<'_> = ImpactProductNFTClient::new(&env, &contract_id);
     let owner: Address = Address::generate(&env);
     let operator: Address = Address::generate(&env);
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     assert!(!client.is_approved(&operator, &token_id));
 }
 
@@ -129,8 +134,9 @@ fn test_transfer_from() {
     let operator: Address = Address::generate(&env);
     let to: Address = Address::generate(&env);
     env.mock_all_auths();
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     client.approve(&owner, &operator, &token_id);
     client.transfer_from(&operator, &owner, &to, &token_id);
     assert_eq!(client.owner_of(&token_id), to);
@@ -147,8 +153,9 @@ fn test_transfer_not_owner() {
     let not_owner: Address = Address::generate(&env);
     let to: Address = Address::generate(&env);
     env.mock_all_auths();
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     client.transfer(&not_owner, &to, &token_id);
 }
 
@@ -163,8 +170,9 @@ fn test_transfer_from_not_approved() {
     let operator: Address = Address::generate(&env);
     let to: Address = Address::generate(&env);
     env.mock_all_auths();
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     client.transfer_from(&operator, &owner, &to, &token_id);
 }
 
@@ -180,8 +188,9 @@ fn test_transfer_from_wrong_owner() {
     let operator: Address = Address::generate(&env);
     let to: Address = Address::generate(&env);
     env.mock_all_auths();
-    client.mint(&owner);
-    let token_id: i128 = 1;
+    let impact_data: ImpactData = ImpactData { category: String::from_str(&env, "category"), impact_value: 99, location: String::from_str(&env, "location"), start_date: 9999, end_date: 10000, beneficiaries: String::from_str(&env, "someone"), verfied: true, metadata_uri: String::from_str(&env, "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC") };
+    client.create_impact_product(&owner, &impact_data, &100);
+    let token_id: u128 = 1;
     client.approve(&owner, &operator, &token_id);
     client.transfer_from(&operator, &wrong_owner, &to, &token_id);
 }
