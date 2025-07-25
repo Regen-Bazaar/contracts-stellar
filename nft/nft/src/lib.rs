@@ -4,7 +4,7 @@ mod contract;
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Bytes, Env, String, Vec, U256};
 
 #[contract]
-pub struct NFT;
+pub struct ImpactProductNFT;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -19,21 +19,34 @@ pub struct ImpacttData {
     pub metadata_uri: String
 }
 
-
 #[contracttype]
 pub enum DataKey {
     Owner(i128),
     TokenCount,
     Approvals(i128),
+    BASEURI,
+    ADMIN,
+    MINTER,
+    VERIFIER,
+    PAUSER
 }
 
 #[contractimpl]
-impl NFT {
+impl ImpactProductNFT {
     const SUPPLY: i128 = 1000;
-    const NAME: &'static str = "NFT";
-    const SYMBOL: &'static str = "NFT";
-    const METADATA: &'static str = "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC";
-    const IMAGE: &'static str = "https://ipfs.io/ipfs/QmeRHSYkR4aGRLQXaLmZiccwHw7cvctrB211DzxzuRiqW6";
+    const NAME: &'static str = "Regen Bazaar Impact Product";
+    const SYMBOL: &'static str = "RIP";
+
+    //const PLATFORM_FEE_BPS: i128 = 1000;
+
+    pub fn __constructor(env: Env, admin: Address, base_token_uri: String) {
+        env.storage().instance().set(&DataKey::ADMIN, &admin);
+        env.storage().instance().set(&DataKey::MINTER, &admin);
+        env.storage().instance().set(&DataKey::VERIFIER, &admin);
+        env.storage().instance().set(&DataKey::PAUSER, &admin);
+
+        env.storage().instance().set(&DataKey::BASEURI, &base_token_uri);
+    }
 
     pub fn owner_of(env: Env, token_id: i128) -> Address {
         env.storage().persistent().get(&DataKey::Owner(token_id)).unwrap_or_else(|| {
@@ -50,11 +63,8 @@ impl NFT {
     }
 
     pub fn token_uri(env: Env) -> String {
-        String::from_str(&env, Self::METADATA)
-    }
-
-    pub fn token_image(env: Env) -> String {
-        String::from_str(&env, Self::IMAGE)
+        let data: String = env.storage().instance().get(&DataKey::BASEURI).expect("");
+        data
     }
 
     pub fn is_approved(env: Env, operator: Address, token_id: i128) -> bool {
