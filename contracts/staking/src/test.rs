@@ -1,32 +1,69 @@
 #![cfg(test)]
 
+use crate::{DataKey, ImpactProductStaking, NFTStake, StakingParams};
 use soroban_sdk::{
-    testutils::{Address as _, },
-    Vec, Env, Address, IntoVal, Val, contract, contractimpl,
+    contract, contractimpl, testutils::Address as _, Address, Env, IntoVal, String, Val, Vec,
 };
-use crate::{ImpactProductStaking, DataKey, NFTStake, StakingParams};
 
-// Mock NFT contract implementation for testing
+// Mock NFT contract implementation for testing that implements the standard interfaces
 #[contract]
 pub struct MockNFTContract;
 
 #[contractimpl]
 impl MockNFTContract {
-    pub fn ownr_of(env: Env, token_id: u32) -> Address {
-        // Return the owner from storage
-        env.storage().instance().get(&DataKey::Owner(token_id)).unwrap_or(Address::generate(&env))
+    // Standard NFT interface functions
+    pub fn owner(env: Env, _token_id: String) -> Address {
+        // For testing, assume token_id "1" maps to u32 1, etc.
+        let token_id_u32 = 1u32; // Default for testing
+                                 // Return the owner from storage
+        env.storage()
+            .instance()
+            .get(&DataKey::Owner(token_id_u32))
+            .unwrap_or(Address::generate(&env))
     }
 
-    pub fn trnsfr(env: Env, _from: Address, to: Address, token_id: u32) {
-        // Update ownership in storage
-        env.storage().instance().set(&DataKey::Owner(token_id), &to);
+    pub fn transfer(env: Env, _from: Address, to: Address, _token_id: String) {
+        // For testing, assume token_id "1" maps to u32 1
+        let token_id_u32 = 1u32; // Default for testing
+                                 // Update ownership in storage
+        env.storage()
+            .instance()
+            .set(&DataKey::Owner(token_id_u32), &to);
     }
 
-    pub fn impctdat(env: Env, token_id: u32) -> Vec<Val> {
-        // Return impact data from storage
-        env.storage().instance().get(&DataKey::Impact(token_id)).unwrap_or_else(|| {
-            Vec::from_array(&env, [1000u64.into_val(&env), true.into_val(&env)])
-        })
+    pub fn balance(_env: Env, _owner: Address) -> i128 {
+        // Return a default balance for testing
+        1
+    }
+
+    pub fn mint(env: Env, to: Address, _token_id: String) {
+        // For testing, assume token_id "1" maps to u32 1
+        let token_id_u32 = 1u32; // Default for testing
+                                 // Set ownership in storage
+        env.storage()
+            .instance()
+            .set(&DataKey::Owner(token_id_u32), &to);
+    }
+
+    pub fn is_authorized(_env: Env, _owner: Address, _spender: Address, _token_id: String) -> bool {
+        // Return true for testing
+        true
+    }
+
+    pub fn token_metadata(env: Env, _token_id: String) -> String {
+        // Return default metadata for testing
+        String::from_str(&env, "{}")
+    }
+
+    // Impact interface function
+    pub fn get_impact_data(env: Env, _token_id: String) -> Vec<Val> {
+        // For testing, assume token_id "1" maps to u32 1
+        let token_id_u32 = 1u32; // Default for testing
+                                 // Return impact data from storage
+        env.storage()
+            .instance()
+            .get(&DataKey::Impact(token_id_u32))
+            .unwrap_or_else(|| Vec::from_array(&env, [1000u64.into_val(&env), true.into_val(&env)]))
     }
 }
 
@@ -47,13 +84,20 @@ fn test_initialize() {
     let (env, contract_id, admin, nft_contract, rebaz_token) = setup_env();
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     env.as_contract(&contract_id, || {
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-        let stored_nft_contract: Address = env.storage().instance().get(&DataKey::NFTContract).unwrap();
-        let stored_rebaz_token: Address = env.storage().instance().get(&DataKey::REBAZToken).unwrap();
+        let stored_nft_contract: Address =
+            env.storage().instance().get(&DataKey::NFTContract).unwrap();
+        let stored_rebaz_token: Address =
+            env.storage().instance().get(&DataKey::REBAZToken).unwrap();
         let params: StakingParams = env.storage().instance().get(&DataKey::Params).unwrap();
 
         assert_eq!(stored_admin, admin);
@@ -70,8 +114,18 @@ fn test_initialize() {
 fn test_initialize_already_initialized() {
     let (env, contract_id, admin, nft_contract, rebaz_token) = setup_env();
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone()); // Should panic
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        ); // Should panic
     });
 }
 
@@ -83,12 +137,19 @@ fn test_stake_nft() {
     let lock_period = 30 * 24 * 60 * 60; // 30 days
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     // Mock NFT ownership in the NFT contract
     env.as_contract(&nft_contract, || {
-        env.storage().instance().set(&DataKey::Owner(token_id), &user.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::Owner(token_id), &user.clone());
     });
 
     env.as_contract(&contract_id, || {
@@ -96,8 +157,16 @@ fn test_stake_nft() {
     });
 
     env.as_contract(&contract_id, || {
-        let stake: NFTStake = env.storage().instance().get(&DataKey::Stake(token_id)).unwrap();
-        let staked_tokens: Vec<u32> = env.storage().instance().get(&DataKey::StakedTokens(user.clone())).unwrap();
+        let stake: NFTStake = env
+            .storage()
+            .instance()
+            .get(&DataKey::Stake(token_id))
+            .unwrap();
+        let staked_tokens: Vec<u32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakedTokens(user.clone()))
+            .unwrap();
 
         assert_eq!(stake.token_id, token_id);
         assert_eq!(stake.owner, user);
@@ -115,12 +184,19 @@ fn test_stake_already_staked_nft() {
     let lock_period = 30 * 24 * 60 * 60;
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     // Mock NFT ownership in the NFT contract
     env.as_contract(&nft_contract, || {
-        env.storage().instance().set(&DataKey::Owner(token_id), &user.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::Owner(token_id), &user.clone());
     });
 
     // First stake should succeed
@@ -130,7 +206,11 @@ fn test_stake_already_staked_nft() {
 
     // Verify the stake exists
     env.as_contract(&contract_id, || {
-        let stake: NFTStake = env.storage().instance().get(&DataKey::Stake(token_id)).unwrap();
+        let stake: NFTStake = env
+            .storage()
+            .instance()
+            .get(&DataKey::Stake(token_id))
+            .unwrap();
         assert_eq!(stake.token_id, token_id);
         assert_eq!(stake.owner, user);
     });
@@ -139,7 +219,11 @@ fn test_stake_already_staked_nft() {
     // Since we can't easily test the panic in this context, we'll verify the stake still exists
     env.as_contract(&contract_id, || {
         // The stake should still exist and not be overwritten
-        let stake: NFTStake = env.storage().instance().get(&DataKey::Stake(token_id)).unwrap();
+        let stake: NFTStake = env
+            .storage()
+            .instance()
+            .get(&DataKey::Stake(token_id))
+            .unwrap();
         assert_eq!(stake.token_id, token_id);
         assert_eq!(stake.owner, user);
     });
@@ -153,12 +237,19 @@ fn test_claim_rewards() {
     let lock_period = 30 * 24 * 60 * 60;
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     // Mock NFT ownership in the NFT contract
     env.as_contract(&nft_contract, || {
-        env.storage().instance().set(&DataKey::Owner(token_id), &user.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::Owner(token_id), &user.clone());
         // Mock impact data
         env.storage().instance().set(
             &DataKey::Impact(token_id),
@@ -175,7 +266,11 @@ fn test_claim_rewards() {
 
     // Test that the stake was created correctly without time advancement
     env.as_contract(&contract_id, || {
-        let stake: NFTStake = env.storage().instance().get(&DataKey::Stake(token_id)).unwrap();
+        let stake: NFTStake = env
+            .storage()
+            .instance()
+            .get(&DataKey::Stake(token_id))
+            .unwrap();
         assert_eq!(stake.token_id, token_id);
         assert_eq!(stake.owner, user);
         assert_eq!(stake.lock_period, lock_period);
@@ -190,12 +285,19 @@ fn test_unstake_nft() {
     let lock_period = 30 * 24 * 60 * 60;
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     // Mock NFT ownership in the NFT contract
     env.as_contract(&nft_contract, || {
-        env.storage().instance().set(&DataKey::Owner(token_id), &user.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::Owner(token_id), &user.clone());
         // Mock impact data
         env.storage().instance().set(
             &DataKey::Impact(token_id),
@@ -212,7 +314,11 @@ fn test_unstake_nft() {
 
     // Test that the stake was created correctly without time advancement
     env.as_contract(&contract_id, || {
-        let stake: NFTStake = env.storage().instance().get(&DataKey::Stake(token_id)).unwrap();
+        let stake: NFTStake = env
+            .storage()
+            .instance()
+            .get(&DataKey::Stake(token_id))
+            .unwrap();
         assert_eq!(stake.token_id, token_id);
         assert_eq!(stake.owner, user);
         assert_eq!(stake.lock_period, lock_period);
@@ -224,7 +330,12 @@ fn test_update_staking_params() {
     let (env, contract_id, admin, nft_contract, rebaz_token) = setup_env();
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     let new_base_reward_rate = 2000u32;
@@ -232,7 +343,13 @@ fn test_update_staking_params() {
     let new_max_lock_period = 730 * 24 * 60 * 60;
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::update_staking_params(env.clone(), admin.clone(), new_base_reward_rate, new_min_lock_period, new_max_lock_period);
+        ImpactProductStaking::update_staking_params(
+            env.clone(),
+            admin.clone(),
+            new_base_reward_rate,
+            new_min_lock_period,
+            new_max_lock_period,
+        );
     });
 
     env.as_contract(&contract_id, || {
@@ -250,7 +367,12 @@ fn test_update_staking_params_non_admin() {
     let non_admin = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     let new_base_reward_rate = 2000u32;
@@ -258,7 +380,13 @@ fn test_update_staking_params_non_admin() {
     let new_max_lock_period = 730 * 24 * 60 * 60;
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::update_staking_params(env.clone(), non_admin.clone(), new_base_reward_rate, new_min_lock_period, new_max_lock_period); // Should panic
+        ImpactProductStaking::update_staking_params(
+            env.clone(),
+            non_admin.clone(),
+            new_base_reward_rate,
+            new_min_lock_period,
+            new_max_lock_period,
+        ); // Should panic
     });
 }
 
@@ -270,12 +398,19 @@ fn test_get_staked_nfts_and_pending_rewards() {
     let lock_period = 30 * 24 * 60 * 60;
 
     env.as_contract(&contract_id, || {
-        ImpactProductStaking::initialize(env.clone(), admin.clone(), nft_contract.clone(), rebaz_token.clone());
+        ImpactProductStaking::initialize(
+            env.clone(),
+            admin.clone(),
+            nft_contract.clone(),
+            rebaz_token.clone(),
+        );
     });
 
     // Mock NFT ownership in the NFT contract
     env.as_contract(&nft_contract, || {
-        env.storage().instance().set(&DataKey::Owner(token_id), &user.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::Owner(token_id), &user.clone());
         // Mock impact data
         env.storage().instance().set(
             &DataKey::Impact(token_id),

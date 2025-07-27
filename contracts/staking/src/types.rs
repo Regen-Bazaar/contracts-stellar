@@ -20,12 +20,12 @@ pub struct StakingParams {
 
 #[contracttype]
 pub enum DataKey {
-    Stake(u32), // token_id -> NFTStake
+    Stake(u32),            // token_id -> NFTStake
     StakedTokens(Address), // user -> Vec<u32>
     Params,
     Admin,
     NFTContract,
     REBAZToken,
-    Owner(u32), // token_id -> Address
+    Owner(u32),  // token_id -> Address
     Impact(u32), // token_id -> Vec<Val>
-} 
+}

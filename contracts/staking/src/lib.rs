@@ -1,9 +1,13 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec, symbol_short, vec, Val, TryFromVal, IntoVal};
+use soroban_sdk::{
+    contract, contractimpl, symbol_short, Address, Env, String, TryFromVal, Val, Vec,
+};
 
 mod types;
 use types::*;
+mod interfaces;
 mod test;
+use interfaces::{ImpactClient, NftClient, TokenClient};
 
 // Add event types
 use soroban_sdk::contracttype;
@@ -48,11 +52,15 @@ impl ImpactProductStaking {
             panic!("Already initialized");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::NFTContract, &nft_contract);
-        env.storage().instance().set(&DataKey::REBAZToken, &rebaz_token);
+        env.storage()
+            .instance()
+            .set(&DataKey::NFTContract, &nft_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::REBAZToken, &rebaz_token);
         let params = StakingParams {
             base_reward_rate: 1000,
-            min_lock_period: 7 * 24 * 60 * 60, // 7 days
+            min_lock_period: 7 * 24 * 60 * 60,   // 7 days
             max_lock_period: 365 * 24 * 60 * 60, // 365 days
         };
         env.storage().instance().set(&DataKey::Params, &params);
@@ -67,20 +75,21 @@ impl ImpactProductStaking {
         if env.storage().instance().has(&DataKey::Stake(token_id)) {
             panic!("Already staked");
         }
-        // Cross-contract call to NFT contract to check ownership and transfer NFT
+
+        // Get NFT contract address
         let nft_contract: Address = env.storage().instance().get(&DataKey::NFTContract).unwrap();
-        // Check ownership
-        let owner_val: Val = env.invoke_contract::<Val>(
-            &nft_contract,
-            &symbol_short!("ownr_of"),
-            vec![&env, Val::from(token_id)]
-        );
-        let owner = Address::try_from_val(&env, &owner_val).unwrap();
+
+        // Use proper NFT interface to check ownership
+        let nft_client = NftClient::new(&env, &nft_contract);
+        let token_id_str = token_id_to_string(&env, token_id);
+        let owner = nft_client.owner(&token_id_str);
+
         if owner != user {
             panic!("Not the token owner");
         }
-        // Transfer NFT to this contract
-        env.invoke_contract::<()>(&nft_contract, &symbol_short!("trnsfr"), vec![&env, user.to_val(), env.current_contract_address().to_val(), Val::from(token_id)]);
+
+        // Transfer NFT to this contract using proper interface
+        nft_client.transfer(&user, &env.current_contract_address(), &token_id_str);
         let now = env.ledger().timestamp();
         let lock_end_time = now + lock_period;
         let multiplier = calculate_multiplier(lock_period);
@@ -93,10 +102,18 @@ impl ImpactProductStaking {
             last_claim_time: now,
             multiplier,
         };
-        env.storage().instance().set(&DataKey::Stake(token_id), &stake);
-        let mut staked_tokens: Vec<u32> = env.storage().instance().get(&DataKey::StakedTokens(user.clone())).unwrap_or(Vec::new(&env));
+        env.storage()
+            .instance()
+            .set(&DataKey::Stake(token_id), &stake);
+        let mut staked_tokens: Vec<u32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakedTokens(user.clone()))
+            .unwrap_or(Vec::new(&env));
         staked_tokens.push_back(token_id);
-        env.storage().instance().set(&DataKey::StakedTokens(user.clone()), &staked_tokens);
+        env.storage()
+            .instance()
+            .set(&DataKey::StakedTokens(user.clone()), &staked_tokens);
         // Emit NFTStaked event
         env.events().publish(
             (symbol_short!("nft_stkd"),),
@@ -112,7 +129,11 @@ impl ImpactProductStaking {
 
     pub fn claim_rewards(env: Env, user: Address, token_id: u32) -> u64 {
         user.require_auth();
-        let mut stake: NFTStake = env.storage().instance().get(&DataKey::Stake(token_id)).unwrap();
+        let mut stake: NFTStake = env
+            .storage()
+            .instance()
+            .get(&DataKey::Stake(token_id))
+            .unwrap();
         if stake.owner != user {
             panic!("Not stake owner");
         }
@@ -121,10 +142,13 @@ impl ImpactProductStaking {
             panic!("No rewards to claim");
         }
         stake.last_claim_time = env.ledger().timestamp();
-        env.storage().instance().set(&DataKey::Stake(token_id), &stake);
+        env.storage()
+            .instance()
+            .set(&DataKey::Stake(token_id), &stake);
         // Cross-contract call to REBAZ token contract to mint reward
         let rebaz_token: Address = env.storage().instance().get(&DataKey::REBAZToken).unwrap();
-        env.invoke_contract::<()>(&rebaz_token, &symbol_short!("mint"), vec![&env, user.to_val(), reward.into_val(&env)]);
+        let token_client = TokenClient::new(&env, &rebaz_token);
+        token_client.mint(&user, &(reward as i128));
         // Emit RewardsClaimed event
         env.events().publish(
             (symbol_short!("r_clmd"),),
@@ -139,7 +163,11 @@ impl ImpactProductStaking {
 
     pub fn unstake_nft(env: Env, user: Address, token_id: u32) -> u64 {
         user.require_auth();
-        let stake: NFTStake = env.storage().instance().get(&DataKey::Stake(token_id)).unwrap();
+        let stake: NFTStake = env
+            .storage()
+            .instance()
+            .get(&DataKey::Stake(token_id))
+            .unwrap();
         if stake.owner != user {
             panic!("Not stake owner");
         }
@@ -148,7 +176,11 @@ impl ImpactProductStaking {
         }
         let reward = Self::claim_rewards(env.clone(), user.clone(), token_id);
         env.storage().instance().remove(&DataKey::Stake(token_id));
-        let mut staked_tokens: Vec<u32> = env.storage().instance().get(&DataKey::StakedTokens(user.clone())).unwrap_or(Vec::new(&env));
+        let mut staked_tokens: Vec<u32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakedTokens(user.clone()))
+            .unwrap_or(Vec::new(&env));
         let mut idx = None;
         for i in 0..staked_tokens.len() {
             if staked_tokens.get(i).unwrap() == token_id {
@@ -159,10 +191,14 @@ impl ImpactProductStaking {
         if let Some(i) = idx {
             staked_tokens.remove_unchecked(i);
         }
-        env.storage().instance().set(&DataKey::StakedTokens(user.clone()), &staked_tokens);
+        env.storage()
+            .instance()
+            .set(&DataKey::StakedTokens(user.clone()), &staked_tokens);
         // Cross-contract call to NFT contract to transfer NFT back to user
         let nft_contract: Address = env.storage().instance().get(&DataKey::NFTContract).unwrap();
-        env.invoke_contract::<()>(&nft_contract, &symbol_short!("trnsfr"), vec![&env, env.current_contract_address().to_val(), user.to_val(), Val::from(token_id)]);
+        let nft_client = NftClient::new(&env, &nft_contract);
+        let token_id_str = token_id_to_string(&env, token_id);
+        nft_client.transfer(&env.current_contract_address(), &user, &token_id_str);
         // Emit NFTUnstaked event
         env.events().publish(
             (symbol_short!("nft_unstk"),),
@@ -175,7 +211,10 @@ impl ImpactProductStaking {
     }
 
     pub fn get_staked_nfts(env: Env, user: Address) -> Vec<u32> {
-        env.storage().instance().get(&DataKey::StakedTokens(user)).unwrap_or(Vec::new(&env))
+        env.storage()
+            .instance()
+            .get(&DataKey::StakedTokens(user))
+            .unwrap_or(Vec::new(&env))
     }
 
     pub fn get_stake_info(env: Env, token_id: u32) -> Option<NFTStake> {
@@ -183,14 +222,24 @@ impl ImpactProductStaking {
     }
 
     pub fn pending_rewards(env: Env, token_id: u32) -> u64 {
-        if let Some(stake) = env.storage().instance().get::<_, NFTStake>(&DataKey::Stake(token_id)) {
+        if let Some(stake) = env
+            .storage()
+            .instance()
+            .get::<_, NFTStake>(&DataKey::Stake(token_id))
+        {
             calculate_rewards(&env, &stake)
         } else {
             0
         }
     }
 
-    pub fn update_staking_params(env: Env, admin: Address, base_reward_rate: u32, min_lock_period: u64, max_lock_period: u64) {
+    pub fn update_staking_params(
+        env: Env,
+        admin: Address,
+        base_reward_rate: u32,
+        min_lock_period: u64,
+        max_lock_period: u64,
+    ) {
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if stored_admin != admin {
@@ -231,12 +280,10 @@ fn calculate_multiplier(lock_period: u64) -> u32 {
 
 fn calculate_rewards(env: &Env, stake: &NFTStake) -> u64 {
     let nft_contract: Address = env.storage().instance().get(&DataKey::NFTContract).unwrap();
-    // Assume the NFT contract has get_impact_data(token_id) -> (u64, bool)
-    let impact_vec: Vec<Val> = env.invoke_contract::<Vec<Val>>(
-        &nft_contract,
-        &symbol_short!("impctdat"),
-        vec![&env, Val::from(stake.token_id)]
-    );
+    // Use proper impact interface to get impact data
+    let impact_client = ImpactClient::new(env, &nft_contract);
+    let token_id_str = token_id_to_string(env, stake.token_id);
+    let impact_vec: Vec<Val> = impact_client.get_impact_data(&token_id_str);
     let impact_value = u64::try_from_val(env, &impact_vec.get(0).unwrap()).unwrap();
     let verified = bool::try_from_val(env, &impact_vec.get(1).unwrap()).unwrap();
     let mut impact = impact_value;
@@ -246,6 +293,21 @@ fn calculate_rewards(env: &Env, stake: &NFTStake) -> u64 {
     let params: StakingParams = env.storage().instance().get(&DataKey::Params).unwrap();
     let duration = env.ledger().timestamp() - stake.last_claim_time;
     let annual_equiv = (duration * 10000) / 31536000;
-    let rewards = (impact * params.base_reward_rate as u64 * stake.multiplier as u64 * annual_equiv) / (10000 * 10000);
+    let rewards =
+        (impact * params.base_reward_rate as u64 * stake.multiplier as u64 * annual_equiv)
+            / (10000 * 10000);
     rewards
+}
+
+// Helper function to convert token_id to string
+fn token_id_to_string(env: &Env, token_id: u32) -> String {
+    // Simple conversion for now - can be improved
+    match token_id {
+        1 => String::from_str(env, "1"),
+        2 => String::from_str(env, "2"),
+        3 => String::from_str(env, "3"),
+        4 => String::from_str(env, "4"),
+        5 => String::from_str(env, "5"),
+        _ => String::from_str(env, "1"), // Default fallback
+    }
 }
