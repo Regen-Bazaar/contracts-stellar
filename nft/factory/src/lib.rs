@@ -1,126 +1,165 @@
 #![no_std]
 mod contract;
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Bytes, Env, String, Vec, U256, Symbol};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, String, Vec};
+
+use crate::contract_nft::ImpactData;
+
+mod contract_nft {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/nft.wasm"
+    );
+}
 
 #[contract]
-pub struct NFT;
-
-
-const ADMIN: Symbol = symbol_short!("admin");
+pub struct ImpactProductFactory;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ImpactProductData {
     pub category: String,
     pub location: String,
-    pub start_date: U256,
-    pub end_date: U256,
+    pub start_date: u128,
+    pub end_date: u128,
     pub beneficiaries: String,
-    pub base_impact_value: U256,
-    pub listing_price: U256,
+    pub base_impact_value: u128,
+    pub listing_price: u128,
     pub metadata_uri: String
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ImpactParams {
+    pub category: String,
+    pub base_multiplier: u128,
+    pub verified: bool
+}
 
 #[contracttype]
 pub enum DataKey {
-    Owner(i128),
-    TokenCount,
-    Approvals(i128),
+    ADMIN,
+    CREATOR,
+    VERIFIER,
+    IsPaused,
+    ImpactProductNft,
+    ImpactParameters,
+    ImpactCategories
 }
 
 #[contractimpl]
-impl NFT {
-    const SUPPLY: i128 = 1000;
-    const NAME: &'static str = "NFT";
-    const SYMBOL: &'static str = "NFT";
-    const METADATA: &'static str = "https://ipfs.io/ipfs/QmegWR31kiQcD9S2katTXKxracbAgLs2QLBRGruFW3NhXC";
-    const IMAGE: &'static str = "https://ipfs.io/ipfs/QmeRHSYkR4aGRLQXaLmZiccwHw7cvctrB211DzxzuRiqW6";
+impl ImpactProductFactory {
+    pub fn __constructor(env: Env, admin: Address, nft_contract: Address) {
+        env.storage().instance().set(&DataKey::IsPaused, &false);
+        env.storage().instance().set(&DataKey::ADMIN, &admin);
+        env.storage().instance().set(&DataKey::CREATOR, &admin);
+        env.storage().instance().set(&DataKey::VERIFIER, &admin);
 
-    pub fn __constructor(env: Env, admin: Address) {
-        env.storage().instance().set(&ADMIN, &admin);
+        env.storage().instance().set(&DataKey::ImpactProductNft, &nft_contract);
+
+                let impact_params: Map<String, ImpactParams> = Map::new(&env);
+        env.storage().persistent().set(&DataKey::ImpactParameters, &impact_params);
+
+        let impact_categories: Vec<String> = Vec::new(&env);
+        env.storage().persistent().set(&DataKey::ImpactCategories, &impact_categories);
+
+        Self::add_impact_category(env.clone(), String::from_str(&env, "Community gardens"), 1000);
+        Self::add_impact_category(env.clone(), String::from_str(&env, "Tree preservation"), 2500);
+        Self::add_impact_category(env.clone(), String::from_str(&env, "Eco tourism"), 1500);
+        Self::add_impact_category(env.clone(), String::from_str(&env, "Educational programs"), 2000);
+        Self::add_impact_category(env.clone(), String::from_str(&env, "Wildlife Conservation"), 3000);
+        Self::add_impact_category(env.clone(), String::from_str(&env, "CO2 Emissions Reduction"), 3500);
+        Self::add_impact_category(env.clone(), String::from_str(&env, "Waste Management"), 1200);
     }
 
-    pub fn owner_of(env: Env, token_id: i128) -> Address {
-        env.storage().persistent().get(&DataKey::Owner(token_id)).unwrap_or_else(|| {
-            Address::from_string_bytes(&Bytes::from_slice(&env, &[0; 32]))
-        })
-    }
+    pub fn create_impact_product(env: Env, impact_product_data: ImpactProductData) -> u128 {
+        let creator: Address = env.storage().instance().get(&DataKey::CREATOR).expect("CREATOR not found");
+        creator.require_auth();
 
-    pub fn name(env: Env) -> String {
-        String::from_str(&env, Self::NAME)
-    }
-
-    pub fn symbol(env: Env) -> String {
-        String::from_str(&env, Self::SYMBOL)
-    }
-
-    pub fn token_uri(env: Env) -> String {
-        String::from_str(&env, Self::METADATA)
-    }
-
-    pub fn token_image(env: Env) -> String {
-        String::from_str(&env, Self::IMAGE)
-    }
-
-    pub fn is_approved(env: Env, operator: Address, token_id: i128) -> bool {
-        let key: DataKey = DataKey::Approvals(token_id);
-        let approvals: Vec<Address> = env.storage().persistent().get::<DataKey, Vec<Address>>(&key).unwrap_or_else(|| Vec::new(&env));
-        approvals.contains(&operator)
-    }
-
-    pub fn transfer(env: Env, owner: Address, to: Address, token_id: i128) {
-        owner.require_auth();
-        let actual_owner: Address = Self::owner_of(env.clone(), token_id);
-        if owner == actual_owner {
-            env.storage().persistent().set(&DataKey::Owner(token_id), &to);
-            env.storage().persistent().remove(&DataKey::Approvals(token_id));
-            env.events().publish((symbol_short!("Transfer"),), (owner, to, token_id));
-        } else {
-            panic!("Not the token owner");
+        let is_paused: bool = env.storage().instance().get(&DataKey::IsPaused).expect("contains value");
+        if is_paused {
+            panic!("contract paused")
         }
+        if impact_product_data.base_impact_value == 0 {
+            panic!("Impact value must be positive")
+        }
+        if impact_product_data.listing_price == 0 {
+            panic!("Price must be positive")
+        }
+        if String::len(&impact_product_data.category) == 0 {
+            panic!("Category cannot be empty")
+        }
+        if !Self::is_category_supported(env.clone(), impact_product_data.category.clone()) {
+            panic!("Unsupported impact category")
+        }
+        
+        let final_impact_value: u128 = Self::calculate_impact_value(env.clone(), impact_product_data.category.clone(), impact_product_data.base_impact_value);
+        
+        let contract: Address = env.storage().instance().get(&DataKey::ImpactProductNft).expect("Should contain nft address");
+        let client: contract_nft::Client<'_> = contract_nft::Client::new(&env, &contract);
+
+        let impact_data: ImpactData = ImpactData { beneficiaries: impact_product_data.beneficiaries, category: impact_product_data.category, end_date: impact_product_data.end_date, impact_value: final_impact_value, location: impact_product_data.location, metadata_uri: impact_product_data.metadata_uri, start_date: impact_product_data.start_date, verified: false };
+        let token_id: u128 = client.create_impact_product(&creator, &impact_data, &impact_product_data.listing_price);
+        
+
+        token_id
     }
 
-    pub fn mint(env: Env, to: Address) {
-        let mut token_count: i128 = env.storage().persistent().get(&DataKey::TokenCount).unwrap_or(0);
-        assert!(token_count < Self::SUPPLY, "Maximum token supply reached");
-        token_count += 1;
-        env.storage().persistent().set(&DataKey::TokenCount, &token_count);
-        env.storage().persistent().set(&DataKey::Owner(token_count), &to);
-        env.events().publish((symbol_short!("Mint"),), (to, token_count));
+    pub fn get_supported_categories(env: Env) -> Vec<String> {
+        let impact_categories: Vec<String> = env.storage().persistent().get(&DataKey::ImpactCategories).expect("Should contain Impact Categories");
+        impact_categories
     }
 
-    pub fn approve(env: Env, owner: Address, to: Address, token_id: i128) {
-        owner.require_auth();
-        let actual_owner: Address = Self::owner_of(env.clone(), token_id);
-        if owner == actual_owner {
-            let key: DataKey = DataKey::Approvals(token_id);
-            let mut approvals: Vec<Address> = env.storage().persistent().get::<DataKey, Vec<Address>>(&key).unwrap_or_else(|| Vec::new(&env));
-            if !approvals.contains(&to) {
-                approvals.push_back(to.clone());
-                env.storage().persistent().set(&key, &approvals);
-                env.events().publish((symbol_short!("Approval"),), (owner, to, token_id));
-            }
-        } else {
-            panic!("Not the token owner");
-        }
+    fn is_category_supported(env: Env, category: String) -> bool {
+        let impact_parameters: Map<String, ImpactParams> = env.storage().persistent().get(&DataKey::ImpactParameters).expect("Should contain Impact Categories");
+        let impact_category: ImpactParams = impact_parameters.get(category).expect("should contain category data");
+        impact_category.base_multiplier > 0
     }
 
-    pub fn transfer_from(env: Env, spender: Address, from: Address, to: Address, token_id: i128) {
-        spender.require_auth();
-        let actual_owner: Address = Self::owner_of(env.clone(), token_id);
-        if from != actual_owner {
-            panic!("From not owner");
+    fn add_impact_category(env: Env, category: String, base_multiplier: u128) {
+        if String::len(&category) == 0 {
+            panic!("Category cannot be empty")
         }
-        let key: DataKey = DataKey::Approvals(token_id);
-        let approvals: Vec<Address> = env.storage().persistent().get::<DataKey, Vec<Address>>(&key).unwrap_or_else(|| Vec::new(&env));
-        if !approvals.contains(&spender) {
-            panic!("Spender is not approved for this token");
+        if base_multiplier == 0 {
+            panic!("Multiplier must be positive")
         }
-        env.storage().persistent().set(&DataKey::Owner(token_id), &to);
-        env.storage().persistent().remove(&DataKey::Approvals(token_id));
-        env.events().publish((symbol_short!("Transfer"),), (from, to, token_id));
+        if !Self::is_category_supported(env.clone(), category.clone()) {
+            panic!("Category already exists")
+        }
+        
+        let mut impact_categories: Vec<String> = env.storage().persistent().get(&DataKey::ImpactCategories).expect("Should contain Impact Categories");
+        impact_categories.push_back(category.clone());
+        env.storage().persistent().set(&DataKey::ImpactCategories, &impact_categories);
+
+        Self::calculate_and_store_impact_params(env, category, base_multiplier, false);
+    }
+
+    fn calculate_and_store_impact_params(env: Env, category: String, mult: u128, verified: bool) {
+        let mut impact_parameters: Map<String, ImpactParams> = env.storage().persistent().get(&DataKey::ImpactParameters).expect("Should contain Impact Parameters");
+        let data: ImpactParams = ImpactParams { category: category.clone(), base_multiplier: mult, verified: verified };
+        impact_parameters.set(category, data);
+        env.storage().persistent().set(&DataKey::ImpactParameters, &impact_parameters);
+    }
+
+    fn calculate_impact_value(env: Env, category: String, base_value: u128) -> u128 {
+        if !Self::is_category_supported(env.clone(), category.clone()) {
+            panic!("Unsupported impact category")
+        }
+        let impact_parameters: Map<String, ImpactParams> = env.storage().persistent().get(&DataKey::ImpactParameters).expect("Should contain Impact Parameters");
+        let params: ImpactParams = impact_parameters.get(category).expect("should contain category data");
+        let calculated_value: u128 = base_value * params.base_multiplier / 10000;
+        calculated_value 
+    }
+
+    pub fn pause(env: Env) {
+        let pauser: Address = env.storage().instance().get(&DataKey::ADMIN).expect("PAUSER not found");
+        pauser.require_auth();
+        env.storage().instance().set(&DataKey::IsPaused, &true);
+    }
+
+    pub fn unpause(env: Env) {
+        let pauser: Address = env.storage().instance().get(&DataKey::ADMIN).expect("PAUSER not found");
+        pauser.require_auth();
+        env.storage().instance().set(&DataKey::IsPaused, &false);
     }
 }
 

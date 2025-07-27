@@ -110,7 +110,7 @@ impl ImpactProductNFT {
         env.storage().instance().set(&DataKey::IsPaused, &false);
     }
 
-    pub fn create_impact_product(env: Env, to: Address, impact_data: ImpactData, price: u128) {
+    pub fn create_impact_product(env: Env, to: Address, impact_data: ImpactData, price: u128) -> u128 {
         let minter: Address = env.storage().instance().get(&DataKey::MINTER).expect("MINTER not found");
         minter.require_auth();
         let is_paused: bool = env.storage().instance().get(&DataKey::IsPaused).expect("contains value");
@@ -174,6 +174,7 @@ impl ImpactProductNFT {
             category_tokens_all.set(impact_data.category, category_tokens_array);
             env.storage().persistent().set(&DataKey::CreatorTokens, &category_tokens_all);
         }
+        current_id
     }
 
     pub fn get_impact_data(env: Env, token_id: u128) -> ImpactData {
