@@ -116,7 +116,7 @@ impl ImpactProductFactory {
 
     fn is_category_supported(env: Env, category: String) -> bool {
         let impact_parameters: Map<String, ImpactParams> = env.storage().persistent().get(&DataKey::ImpactParameters).expect("Should contain Impact Categories");
-        let impact_category: ImpactParams = impact_parameters.get(category).expect("should contain category data");
+        let impact_category: ImpactParams = impact_parameters.get(category).unwrap_or_else( || ImpactParams { category: String::from_str(&env, ""), base_multiplier: 0, verified: false});
         impact_category.base_multiplier > 0
     }
 
@@ -133,7 +133,7 @@ impl ImpactProductFactory {
         if base_multiplier == 0 {
             panic!("Multiplier must be positive")
         }
-        if !Self::is_category_supported(env.clone(), category.clone()) {
+        if Self::is_category_supported(env.clone(), category.clone()) {
             panic!("Category already exists")
         }
         
