@@ -219,6 +219,7 @@ impl ImpactProductNFT {
         for value in category_list.iter(){
             if value == token_id {
                 category_list.remove(item);
+                item -= 1;
             }
             item +=1;
         }

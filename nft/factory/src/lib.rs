@@ -56,19 +56,19 @@ impl ImpactProductFactory {
 
         env.storage().instance().set(&DataKey::ImpactProductNft, &nft_contract);
 
-                let impact_params: Map<String, ImpactParams> = Map::new(&env);
+        let impact_params: Map<String, ImpactParams> = Map::new(&env);
         env.storage().persistent().set(&DataKey::ImpactParameters, &impact_params);
 
         let impact_categories: Vec<String> = Vec::new(&env);
         env.storage().persistent().set(&DataKey::ImpactCategories, &impact_categories);
 
-        Self::add_impact_category(env.clone(), String::from_str(&env, "Community gardens"), 1000);
-        Self::add_impact_category(env.clone(), String::from_str(&env, "Tree preservation"), 2500);
-        Self::add_impact_category(env.clone(), String::from_str(&env, "Eco tourism"), 1500);
-        Self::add_impact_category(env.clone(), String::from_str(&env, "Educational programs"), 2000);
-        Self::add_impact_category(env.clone(), String::from_str(&env, "Wildlife Conservation"), 3000);
-        Self::add_impact_category(env.clone(), String::from_str(&env, "CO2 Emissions Reduction"), 3500);
-        Self::add_impact_category(env.clone(), String::from_str(&env, "Waste Management"), 1200);
+        Self::_add_impact_category(env.clone(), String::from_str(&env, "Community gardens"), 1000);
+        Self::_add_impact_category(env.clone(), String::from_str(&env, "Tree preservation"), 2500);
+        Self::_add_impact_category(env.clone(), String::from_str(&env, "Eco tourism"), 1500);
+        Self::_add_impact_category(env.clone(), String::from_str(&env, "Educational programs"), 2000);
+        Self::_add_impact_category(env.clone(), String::from_str(&env, "Wildlife Conservation"), 3000);
+        Self::_add_impact_category(env.clone(), String::from_str(&env, "CO2 Emissions Reduction"), 3500);
+        Self::_add_impact_category(env.clone(), String::from_str(&env, "Waste Management"), 1200);
     }
 
     pub fn create_impact_product(env: Env, impact_product_data: ImpactProductData) -> u128 {
@@ -100,8 +100,13 @@ impl ImpactProductFactory {
         let impact_data: ImpactData = ImpactData { beneficiaries: impact_product_data.beneficiaries, category: impact_product_data.category, end_date: impact_product_data.end_date, impact_value: final_impact_value, location: impact_product_data.location, metadata_uri: impact_product_data.metadata_uri, start_date: impact_product_data.start_date, verified: false };
         let token_id: u128 = client.create_impact_product(&creator, &impact_data, &impact_product_data.listing_price);
         
-
         token_id
+    }
+
+    pub fn verify_impact_product(env: Env, token_id: u128, validators: Vec<Address> ) -> bool {
+        let contract: Address = env.storage().instance().get(&DataKey::ImpactProductNft).expect("Should contain nft address");
+        let client: contract_nft::Client<'_> = contract_nft::Client::new(&env, &contract);
+        client.verify_token(&token_id, &validators)
     }
 
     pub fn get_supported_categories(env: Env) -> Vec<String> {
@@ -115,7 +120,13 @@ impl ImpactProductFactory {
         impact_category.base_multiplier > 0
     }
 
-    fn add_impact_category(env: Env, category: String, base_multiplier: u128) {
+    pub fn add_impact_category(env: Env, category: String, base_multiplier: u128) {
+        let admin: Address = env.storage().instance().get(&DataKey::ADMIN).expect("contains ADMIN");
+        admin.require_auth();
+        Self::_add_impact_category(env, category, base_multiplier);
+    }
+
+    fn _add_impact_category(env: Env, category: String, base_multiplier: u128) {
         if String::len(&category) == 0 {
             panic!("Category cannot be empty")
         }
@@ -130,6 +141,38 @@ impl ImpactProductFactory {
         impact_categories.push_back(category.clone());
         env.storage().persistent().set(&DataKey::ImpactCategories, &impact_categories);
 
+        Self::calculate_and_store_impact_params(env, category, base_multiplier, false);
+    }
+
+    pub fn remove_impact_category(env: Env, category: String) {
+        let admin: Address = env.storage().instance().get(&DataKey::ADMIN).expect("contains ADMIN");
+        admin.require_auth();
+        if !Self::is_category_supported(env.clone(), category.clone()) {
+            panic!("Category already exists")
+        }
+
+        let mut impact_categories: Vec<String> = env.storage().persistent().get(&DataKey::ImpactCategories).expect("Should contain Impact Categories");
+
+        let mut item: u32 = 0;
+        for value in impact_categories.iter() {
+            if value == category {
+                impact_categories.remove(item);
+                item -= 1;
+            }
+            item += 1;
+        }
+        env.storage().persistent().set(&DataKey::ImpactCategories, &impact_categories);
+    }
+
+    pub fn update_impact_params(env: Env, category: String, base_multiplier: u128) {
+        let admin: Address = env.storage().instance().get(&DataKey::ADMIN).expect("contains ADMIN");
+        admin.require_auth();
+        if !Self::is_category_supported(env.clone(), category.clone()) {
+            panic!("Category already exists")
+        }
+        if base_multiplier == 0 {
+            panic!("Multiplier must be positive")
+        }
         Self::calculate_and_store_impact_params(env, category, base_multiplier, false);
     }
 
@@ -150,15 +193,21 @@ impl ImpactProductFactory {
         calculated_value 
     }
 
+    pub fn grant_creator_role(env: Env, creator: Address) {
+        let admin: Address = env.storage().instance().get(&DataKey::ADMIN).expect("PAUSER not found");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::CREATOR, &creator);
+    }
+
     pub fn pause(env: Env) {
-        let pauser: Address = env.storage().instance().get(&DataKey::ADMIN).expect("PAUSER not found");
-        pauser.require_auth();
+        let admin: Address = env.storage().instance().get(&DataKey::ADMIN).expect("PAUSER not found");
+        admin.require_auth();
         env.storage().instance().set(&DataKey::IsPaused, &true);
     }
 
     pub fn unpause(env: Env) {
-        let pauser: Address = env.storage().instance().get(&DataKey::ADMIN).expect("PAUSER not found");
-        pauser.require_auth();
+        let admin: Address = env.storage().instance().get(&DataKey::ADMIN).expect("PAUSER not found");
+        admin.require_auth();
         env.storage().instance().set(&DataKey::IsPaused, &false);
     }
 }
