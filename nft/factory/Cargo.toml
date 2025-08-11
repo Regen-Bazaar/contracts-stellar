@@ -1,0 +1,16 @@
+[package]
+name = "NFTFactory"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "nftfactory"
+doctest = false
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
