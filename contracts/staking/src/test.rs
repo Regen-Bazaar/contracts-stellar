@@ -71,9 +71,9 @@ fn setup_env() -> (Env, Address, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, ImpactProductStaking {});
+    let contract_id = env.register(ImpactProductStaking,  ());
     let admin = Address::generate(&env);
-    let nft_contract = env.register_contract(None, MockNFTContract {});
+    let nft_contract = env.register(MockNFTContract, ());
     let rebaz_token = Address::generate(&env);
 
     (env, contract_id, admin, nft_contract, rebaz_token)
