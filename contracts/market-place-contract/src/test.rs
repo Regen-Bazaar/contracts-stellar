@@ -6,7 +6,7 @@ use crate::error::ContractError;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env, IntoVal, String};
 use token::Client as TokenClient;
-use token::StellarAssetClient as TokenAdminClient;
+use token::StellarAssetClient;
 
 const NFT_PRICE: u128 = 100;
 const USER_STARTING_BALANCE: i128 = 1_000_000;
@@ -33,13 +33,14 @@ impl MarketplaceTest {
         let buyer = Address::generate(&env);
 
         // Setup Token Contract
-        let token_address = env.register_stellar_asset_contract(admin.clone());
-        let token_admin_client = TokenAdminClient::new(&env, &token_address);
+        let token = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_address = token.address();
+        let token_admin_client = StellarAssetClient::new(&env, &token_address);
         token_admin_client.mint(&creator, &USER_STARTING_BALANCE);
         token_admin_client.mint(&buyer, &USER_STARTING_BALANCE);
 
         // Setup Marketplace Contract
-        let contract_address = env.register_contract(None, MarketplaceContract);
+        let contract_address = env.register(MarketplaceContract, ());
         let contract_client = MarketplaceContractClient::new(&env, &contract_address);
         contract_client.initialize(&admin);
 
